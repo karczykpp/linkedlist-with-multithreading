@@ -1,103 +1,73 @@
-===============================
-Lista o ograniczonej pojemności 
-===============================
--------------------------------------
-Programowanie systemowe i współbieżne
--------------------------------------
+# 💻 TList – Concurrent Bounded List in C
 
+![Language](https://img.shields.io/badge/Language-C-blue.svg?logo=c)
+![Threads](https://img.shields.io/badge/POSIX-Pthreads-green?logo=linux)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-:Author: Jakub Karcz 160117 <jakub.karcz@student.put.poznan.pl>
-:Date:   v1.0, 2025-01-25
+> System-level concurrent bounded list using **POSIX threads**.  
+> Handles multiple producers/consumers with blocking behavior and dynamic resizing.
 
+A thread-safe, capacity-limited list designed for concurrent programming assignments.  
+Implements mutexes and condition variables to safely coordinate access between threads.
 
-.. highlight:: c
+---
 
+## 📦 Table of Contents
 
-Struktury danych
-================
+- [📝 Description](#-description)
+- [🚀 Features](#-features)
+- [🧪 Example Usage](#-example-usage)
+- [🔧 Installation](#-installation)
+- [⚙️ Functions](#️-functions)
+- [🧠 Concurrency Details](#-concurrency-details)
+- [📁 Project Structure](#-project-structure)
+- [📜 License](#-license)
 
-1. Struktura ``TList``::
+---
 
-      typedef struct {
-          void **items;
-          int maxSize;
-          int counter;
-          int head;
-          int tail;
-          pthread_mutex_t lock;
-          pthread_cond_t notEmpty;
-          pthread_cond_t notFull;
-      } TList;
-Funkcje
-=======
+## 📝 Description
 
-W implementacji zawarto kilka podstawowych funkcji służących do zarządzania listą współbieżną. Każda z tych funkcji chroni operacje na liście za pomocą muteksów oraz zmiennych warunkowych, aby umożliwić współpracę wielu wątków.
+`TList` is a fixed-size concurrent list with blocking behavior:
 
-1. ``TList *createList(int s)`` -- tworzy nową listę o maksymalnym rozmiarze ``s``.
-   Inicjalizuje dynamicznie przydzieloną pamięć oraz muteksy i zmienne warunkowe.
+- Threads attempting to **insert** into a full list are blocked.
+- Threads attempting to **remove** from an empty list are blocked.
+- Supports safe concurrent operations using **mutexes** and **condition variables**.
 
-2. ``void putItem(TList* lst, void *itm)`` -- dodaje element ``itm`` do listy ``lst``.
-   Funkcja blokuje wątek, jeśli lista jest pełna, i czeka na sygnał zwolnienia miejsca w liście.
+It is ideal for learning and practicing **producer-consumer** problems and synchronization in C.
 
-3. ``void *getItem(TList* lst)`` -- pobiera pierwszy element z listy ``lst``.
-   Funkcja blokuje wątek, jeśli lista jest pusta, i czeka na sygnał o pojawieniu się elementu.
+---
 
-4. ``void* popItem(TList* lst)`` -- pobiera ostatni element z listy ``lst``.
-   Funkcja blokuje wątek, jeśli lista jest pusta, i czeka na sygnał o pojawieniu się elementu. Po pobraniu elementu, licznik zostaje zmniejszony, a wątek czeka na możliwość dodania nowego elementu, jeśli lista była pełna.
+## 🚀 Features
 
+- 🔒 Thread-safe `put`, `get`, `pop`, and `remove` operations
+- ⛔ Blocking behavior with condition variables (no busy waiting)
+- 🧩 Dynamic resizing support (`setMaxSize`)
+- 🔁 List merging support (`appendItems`)
+- 🧹 Clean memory and synchronization resource cleanup
 
-5. ``int removeItem(TList* lst, void *itm)`` -- usuwa element ``itm`` z listy, jeśli taki istnieje.
-   Elementy za usuniętym elementem są przesuwane w celu utrzymania ciągłości listy.
+---
 
-6. ``void showList(TList* lst)`` -- wyświetla zawartość listy, drukując wskaźniki na elementy.
+## 🧪 Example Usage
 
-7. ``int getCount(TList* lst)`` -- zwraca aktualną liczbę elementów w liście ``lst``.
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "list.h"
 
-8. ``void setMaxSize(TList* lst, int s)`` -- ustala nowy maksymalny rozmiar listy ``lst``.
-   Jeśli nowy rozmiar jest większy, zwalnia blokujące wątki.
+int main() {
+    TList *lst = createList(5);
+    int a = 1, b = 2, c = 3, d = 4, e = 5, f = 6;
 
-9. ``void appendItems(TList* lst, TList* lst2)`` -- dodaje wszystkie elementy z listy ``lst2`` do listy ``lst``.
-   W razie potrzeby zwiększa rozmiar tablicy ``lst``.
+    putItem(lst, &a);
+    putItem(lst, &b);
+    putItem(lst, &c);
+    putItem(lst, &d);
+    putItem(lst, &e);
 
-10. ``void destroyList(TList* lst)`` -- usuwa listę ``lst``, zwalniając pamięć i niszcząc muteksy oraz warunki.
+    removeItem(lst, &d); // make space
+    putItem(lst, &f);
 
-Algorytm / dodatkowy opis
-=========================
-
-1. **Sytuacje skrajne:**
-   
-   - **Pełna lista:** Jeśli lista osiągnie swój maksymalny rozmiar, wątek próbujący dodać element zostaje zablokowany do momentu zwolnienia miejsca w liście.
-   - **Pusta lista:** Jeśli lista jest pusta, wątek próbujący pobrać element zostaje zablokowany do momentu pojawienia się elementu.
-
-2. **Odporność na problemy współbieżności:**
-   
-   - **Zakleszczenie:** Algorytm unika zakleszczenia, dzięki warunkom synchronizacji i odpowiedniemu sygnalizowaniu zdarzeń. Warunki ``notEmpty`` i ``notFull`` zapewniają, że wątki nie czekają bez końca.
-   - **Aktywne oczekiwanie:** Dzięki zmiennym warunkowym wątki czekają efektywnie, zamiast aktywnie oczekiwać na spełnienie warunku.
-
-Przykład użycia
-===============
-
-::
-
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <pthread.h>
-	#include <unistd.h>
-	#include "list.h"
-
-	int main() {
-    		TList *lst = createList(5);
-    		pthread_t producer, consumer;
-    		int a = 1, b = 2, c = 3, d = 4, e = 5, f = 6;
-    		putItem(lst, &a);
-    		putItem(lst, &b);
-    		putItem(lst, &c);
-    		putItem(lst, &d);
-   		putItem(lst, &e);
-    		removeItem(lst, &d);
-    		putItem(lst, &f);
-    		showList(lst);
-    		return 0;
+    showList(lst);
+    destroyList(lst);
+    return 0;
 }
-
---------------------------------------------------------------------------------
